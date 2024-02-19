@@ -30,8 +30,8 @@ func newTree32() *Radix32[uint32] {
 
 func TestInsert(t *testing.T) {
 	tests := map[bittest]uint32{
-		bittest{0x81000000, 9}: 2012,
-		bittest{0x80000000, 2}: 2013,
+		{0x81000000, 9}: 2012,
+		{0x80000000, 2}: 2013,
 	}
 	r := New32[uint32]()
 	for bits, value := range tests {
@@ -47,9 +47,9 @@ func TestInsert(t *testing.T) {
 
 func TestInsert2(t *testing.T) {
 	tests := map[bittest]uint32{
-		bittest{0x81000000, 9}: 2012,
-		bittest{0xA0000000, 4}: 1000,
-		bittest{0x80000000, 2}: 2013,
+		{0x81000000, 9}: 2012,
+		{0xA0000000, 4}: 1000,
+		{0x80000000, 2}: 2013,
 	}
 	r := New32[uint32]()
 	for bits, value := range tests {
@@ -358,8 +358,8 @@ func TestFindOverwrite(t *testing.T) {
 
 func TestBitK32(t *testing.T) {
 	tests := map[bittest]byte{
-		bittest{0x40, 0}: 0,
-		bittest{0x40, 6}: 1,
+		{0x40, 0}: 0,
+		{0x40, 6}: 1,
 	}
 	for test, expected := range tests {
 		if x := bitK32(test.key, test.bit); x != expected {
