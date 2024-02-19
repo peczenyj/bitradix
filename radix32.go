@@ -1,11 +1,12 @@
 // Package bitradix implements a radix tree that branches on the bits of a 32 or
 // 64 bits unsigned integer key.
-//                                                                                                  
+//
 // A radix tree is defined in:
-//    Donald R. Morrison. "PATRICIA -- practical algorithm to retrieve
-//    information coded in alphanumeric". Journal of the ACM, 15(4):514-534,
-//    October 1968
-// 
+//
+//	Donald R. Morrison. "PATRICIA -- practical algorithm to retrieve
+//	information coded in alphanumeric". Journal of the ACM, 15(4):514-534,
+//	October 1968
+//
 // This website provides some background information on Radix trees.
 // http://faculty.simpson.edu/lydia.sinapova/www/cmsc250/LN250_Weiss/L08-Radix.htm
 package bitradix
@@ -18,81 +19,103 @@ const (
 )
 
 // Radix32 implements a radix tree with an uint32 as its key.
-type Radix32 struct {
-	branch [2]*Radix32 // branch[0] is left branch for 0, and branch[1] the right for 1
-	parent *Radix32
-	key    uint32      // the key under which this value is stored
-	bits   int         // the number of significant bits, if 0 the key has not been set.
-	Value  interface{} // The value stored.
+type Radix32[T any] struct {
+	branch [2]*Radix32[T] // branch[0] is left branch for 0, and branch[1] the right for 1
+	parent *Radix32[T]
+	key    uint32 // the key under which this value is stored
+	bits   int    // the number of significant bits, if 0 the key has not been set.
+	Value  T      // The value stored.
 }
 
 // New32 returns an empty, initialized Radix32 tree.
-func New32() *Radix32 {
+func New32[T any]() *Radix32[T] {
+	var zero T
 	// It gets two branches by default
-	return &Radix32{[2]*Radix32{
-		&Radix32{[2]*Radix32{nil, nil}, nil, 0, 0, nil},
-		&Radix32{[2]*Radix32{nil, nil}, nil, 0, 0, nil},
-	}, nil, 0, 0, nil}
+	return &Radix32[T]{
+		[2]*Radix32[T]{
+			{
+				[2]*Radix32[T]{nil, nil},
+				nil,
+				0,
+				0,
+				zero,
+			},
+			{
+				[2]*Radix32[T]{nil, nil},
+				nil,
+				0,
+				0,
+				zero,
+			},
+		},
+		nil,
+		0,
+		0,
+		zero,
+	}
 }
 
 // Key returns the key under which this node is stored.
-func (r *Radix32) Key() uint32 {
+func (r *Radix32[_]) Key() uint32 {
 	return r.key
 }
 
 // Bits returns the number of significant bits for the key.
 // A value of zero indicates a key that has not been set.
-func (r *Radix32) Bits() int {
+func (r *Radix32[_]) Bits() int {
 	return r.bits
 }
 
 // Leaf returns true is r is an leaf node, when false is returned
 // the node is a non-leaf node.
-func (r *Radix32) Leaf() bool {
+func (r *Radix32[_]) Leaf() bool {
 	return r.branch[0] == nil && r.branch[1] == nil
 }
 
-// Insert inserts a new value n in the tree r (possibly silently overwriting an existing value). 
+// Insert inserts a new value n in the tree r (possibly silently overwriting an existing value).
 // It returns the inserted node, r must be the root of the tree.
-func (r *Radix32) Insert(n uint32, bits int, v interface{}) *Radix32 {
+func (r *Radix32[T]) Insert(n uint32, bits int, v T) *Radix32[T] {
 	if r.parent != nil {
 		panic("bitradix: not the root node")
 	}
+
 	return r.insert(n, bits, v, bitSize32-1)
 }
 
 // Remove removes a value from the tree r. It returns the node removed, or nil
 // when nothing is found, r must be the root of the tree.
-func (r *Radix32) Remove(n uint32, bits int) *Radix32 {
+func (r *Radix32[T]) Remove(n uint32, bits int) *Radix32[T] {
 	if r.parent != nil {
 		panic("bitradix: not the root node")
 	}
+
 	return r.remove(n, bits, bitSize32-1)
 }
 
-// Find searches the tree for the key n, where the first bits bits of n 
-// are significant. It returns the node found or a node with a common prefix. It 
+// Find searches the tree for the key n, where the first bits bits of n
+// are significant. It returns the node found or a node with a common prefix. It
 // returns nil when nothing can be found.
-func (r *Radix32) Find(n uint32, bits int) *Radix32 {
+func (r *Radix32[T]) Find(n uint32, bits int) *Radix32[T] {
 	if r.parent != nil {
 		panic("bitradix: not the root node")
 	}
+
 	return r.find(n, bits, bitSize32-1, nil)
 }
 
 // Do traverses the tree r in breadth-first order. For each visited node,
 // the function f is called with the current node, and the branch taken
 // (0 for the zero, 1 for the one branch, -1 is used for the root node).
-func (r *Radix32) Do(f func(*Radix32, int)) {
-	q := make(queue32, 0)
+func (r *Radix32[T]) Do(f func(*Radix32[T], int)) {
+	q := make(queue32[T], 0)
 
-	q.Push(&node32{r, -1})
+	q.Push(&node32[T]{r, -1})
 	x := q.Pop()
 	for x != nil {
 		f(x.Radix32, x.branch)
 		for i, b := range x.Radix32.branch {
 			if b != nil {
-				q.Push(&node32{b, i})
+				q.Push(&node32[T]{b, i})
 			}
 		}
 		x = q.Pop()
@@ -100,7 +123,7 @@ func (r *Radix32) Do(f func(*Radix32, int)) {
 }
 
 // Implement insert
-func (r *Radix32) insert(n uint32, bits int, v interface{}, bit int) *Radix32 {
+func (r *Radix32[T]) insert(n uint32, bits int, v T, bit int) *Radix32[T] {
 	switch r.Leaf() {
 	case false: // Non-leaf node, one or two branches, possibly a key
 		if bit < 0 {
@@ -172,13 +195,19 @@ func (r *Radix32) insert(n uint32, bits int, v interface{}, bit int) *Radix32 {
 
 // Walk the tree searching for n, keep the last node that has a key in tow.
 // This is the node we should retreat to when we find and delete our node.
-func (r *Radix32) remove(n uint32, bits, bit int) *Radix32 {
+func (r *Radix32[T]) remove(n uint32, bits, bit int) *Radix32[T] {
 	if r.bits > 0 && r.bits == bits {
 		// possible hit
 		mask := uint32(mask32 << (bitSize32 - uint(r.bits)))
 		if r.key&mask == n&mask {
 			// save r in r1
-			r1 := &Radix32{[2]*Radix32{nil, nil}, nil, r.key, r.bits, r.Value}
+			r1 := &Radix32[T]{
+				[2]*Radix32[T]{nil, nil},
+				nil,
+				r.key,
+				r.bits,
+				r.Value,
+			}
 			r.prune(true)
 			return r1
 		}
@@ -191,7 +220,7 @@ func (r *Radix32) remove(n uint32, bits, bit int) *Radix32 {
 }
 
 // Prune the tree, when b is true the current node is deleted.
-func (r *Radix32) prune(b bool) {
+func (r *Radix32[test_value1]) prune(b bool) {
 	if b {
 		if r.parent == nil {
 			r.clear()
@@ -227,7 +256,7 @@ func (r *Radix32) prune(b bool) {
 		if !b0.Leaf() {
 			return
 		}
-		// move b0 into this node	
+		// move b0 into this node
 		r.set(b0.key, b0.bits, b0.Value)
 		r.branch[0] = b0.branch[0]
 		r.branch[1] = b0.branch[1]
@@ -244,7 +273,7 @@ func (r *Radix32) prune(b bool) {
 	r.parent.prune(false)
 }
 
-func (r *Radix32) find(n uint32, bits, bit int, last *Radix32) *Radix32 {
+func (r *Radix32[T]) find(n uint32, bits, bit int, last *Radix32[T]) *Radix32[T] {
 	switch r.Leaf() {
 	case false:
 		// A prefix that is matching (BETTER MATCHING)
@@ -282,20 +311,30 @@ func (r *Radix32) find(n uint32, bits, bit int, last *Radix32) *Radix32 {
 }
 
 // Return a new node, with r as its parent
-func (r *Radix32) new() *Radix32 {
-	return &Radix32{[2]*Radix32{nil, nil}, r, 0, 0, nil}
+func (r *Radix32[T]) new() *Radix32[T] {
+	var zero T
+
+	return &Radix32[T]{
+		[2]*Radix32[T]{nil, nil},
+		r,
+		0,
+		0,
+		zero,
+	}
 }
 
-func (r *Radix32) set(key uint32, bits int, value interface{}) {
+func (r *Radix32[T]) set(key uint32, bits int, value T) {
 	r.key = key
 	r.bits = bits
 	r.Value = value
 }
 
-func (r *Radix32) clear() {
+func (r *Radix32[T]) clear() {
+	var zero T
+
 	r.key = 0
 	r.bits = 0
-	r.Value = nil
+	r.Value = zero
 }
 
 // From: http://stackoverflow.com/questions/2249731/how-to-get-bit-by-bit-data-from-a-integer-value-in-c

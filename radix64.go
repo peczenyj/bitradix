@@ -1,72 +1,97 @@
 package bitradix
 
 // Radix64 implements a radix tree with an uint64 as its key.
-type Radix64 struct {
-	branch [2]*Radix64 // branch[0] is left branch for 0, and branch[1] the right for 1
-	parent *Radix64
-	key    uint64      // the key under which this value is stored
-	bits   int         // the number of significant bits, if 0 the key has not been set.
-	Value  interface{} // The value stored.
+type Radix64[T any] struct {
+	branch [2]*Radix64[T] // branch[0] is left branch for 0, and branch[1] the right for 1
+	parent *Radix64[T]
+	key    uint64 // the key under which this value is stored
+	bits   int    // the number of significant bits, if 0 the key has not been set.
+	Value  T      // The value stored.
 }
 
-func New64() *Radix64 {
+func New64[T any]() *Radix64[T] {
+	var zero T
 	// It gets two branches by default
-	return &Radix64{[2]*Radix64{
-		&Radix64{[2]*Radix64{nil, nil}, nil, 0, 0, nil},
-		&Radix64{[2]*Radix64{nil, nil}, nil, 0, 0, nil},
-	}, nil, 0, 0, nil}
+	return &Radix64[T]{
+		[2]*Radix64[T]{
+			{
+				[2]*Radix64[T]{nil, nil},
+				nil,
+				0,
+				0,
+				zero,
+			},
+			{
+				[2]*Radix64[T]{nil, nil},
+				nil,
+				0,
+				0,
+				zero,
+			},
+		},
+		nil,
+		0,
+		0,
+		zero,
+	}
 }
 
-func (r *Radix64) Key() uint64 {
+func (r *Radix64[_]) Key() uint64 {
 	return r.key
 }
 
-func (r *Radix64) Bits() int {
+func (r *Radix64[_]) Bits() int {
 	return r.bits
 }
 
-func (r *Radix64) Leaf() bool {
+func (r *Radix64[_]) Leaf() bool {
 	return r.branch[0] == nil && r.branch[1] == nil
 }
 
-func (r *Radix64) Insert(n uint64, bits int, v interface{}) *Radix64 {
+func (r *Radix64[T]) Insert(n uint64, bits int, v T) *Radix64[T] {
 	if r.parent != nil {
 		panic("bitradix: not the root node")
 	}
+
 	return r.insert(n, bits, v, bitSize32-1)
 }
 
-func (r *Radix64) Remove(n uint64, bits int) *Radix64 {
+func (r *Radix64[T]) Remove(n uint64, bits int) *Radix64[T] {
 	if r.parent != nil {
 		panic("bitradix: not the root node")
 	}
+
 	return r.remove(n, bits, bitSize32-1)
 }
 
-func (r *Radix64) Find(n uint64, bits int) *Radix64 {
+func (r *Radix64[T]) Find(n uint64, bits int) *Radix64[T] {
 	if r.parent != nil {
 		panic("bitradix: not the root node")
 	}
+
 	return r.find(n, bits, bitSize32-1, nil)
 }
 
-func (r *Radix64) Do(f func(*Radix64, int)) {
-	q := make(queue64, 0)
+func (r *Radix64[T]) Do(f func(*Radix64[T], int)) {
+	q := make(queue64[T], 0)
 
-	q.Push(&node64{r, -1})
+	q.Push(&node64[T]{r, -1})
 	x := q.Pop()
 	for x != nil {
 		f(x.Radix64, x.branch)
 		for i, b := range x.Radix64.branch {
 			if b != nil {
-				q.Push(&node64{b, i})
+				q.Push(&node64[T]{
+					b,
+					i,
+				})
 			}
 		}
 		x = q.Pop()
 	}
 }
 
-func (r *Radix64) insert(n uint64, bits int, v interface{}, bit int) *Radix64 {
+func (r *Radix64[T]) insert(n uint64, bits int, v T, bit int) *Radix64[T] {
 	switch r.Leaf() {
 	case false: // Non-leaf node, one or two branches, possibly a key
 		if bit < 0 {
@@ -136,13 +161,20 @@ func (r *Radix64) insert(n uint64, bits int, v interface{}, bit int) *Radix64 {
 	panic("bitradix: not reached")
 }
 
-func (r *Radix64) remove(n uint64, bits, bit int) *Radix64 {
+func (r *Radix64[T]) remove(n uint64, bits, bit int) *Radix64[T] {
 	if r.bits > 0 && r.bits == bits {
 		// possible hit
 		mask := uint64(mask64 << (bitSize32 - uint(r.bits)))
 		if r.key&mask == n&mask {
 			// save r in r1
-			r1 := &Radix64{[2]*Radix64{nil, nil}, nil, r.key, r.bits, r.Value}
+			r1 := &Radix64[T]{
+				[2]*Radix64[T]{nil, nil},
+				nil,
+				r.key,
+				r.bits,
+				r.Value,
+			}
+
 			r.prune(true)
 			return r1
 		}
@@ -154,7 +186,7 @@ func (r *Radix64) remove(n uint64, bits, bit int) *Radix64 {
 	return r.branch[bitK64(n, bit)].remove(n, bits, bit-1)
 }
 
-func (r *Radix64) prune(b bool) {
+func (r *Radix64[_]) prune(b bool) {
 	if b {
 		if r.parent == nil {
 			r.clear()
@@ -190,7 +222,7 @@ func (r *Radix64) prune(b bool) {
 		if !b0.Leaf() {
 			return
 		}
-		// move b0 into this node	
+		// move b0 into this node
 		r.set(b0.key, b0.bits, b0.Value)
 		r.branch[0] = b0.branch[0]
 		r.branch[1] = b0.branch[1]
@@ -207,7 +239,7 @@ func (r *Radix64) prune(b bool) {
 	r.parent.prune(false)
 }
 
-func (r *Radix64) find(n uint64, bits, bit int, last *Radix64) *Radix64 {
+func (r *Radix64[T]) find(n uint64, bits, bit int, last *Radix64[T]) *Radix64[T] {
 	switch r.Leaf() {
 	case false:
 		// A prefix that is matching (BETTER MATCHING)
@@ -244,20 +276,30 @@ func (r *Radix64) find(n uint64, bits, bit int, last *Radix64) *Radix64 {
 	panic("bitradix: not reached")
 }
 
-func (r *Radix64) new() *Radix64 {
-	return &Radix64{[2]*Radix64{nil, nil}, r, 0, 0, nil}
+func (r *Radix64[T]) new() *Radix64[T] {
+	var zero T
+
+	return &Radix64[T]{
+		[2]*Radix64[T]{nil, nil},
+		r,
+		0,
+		0,
+		zero,
+	}
 }
 
-func (r *Radix64) set(key uint64, bits int, value interface{}) {
+func (r *Radix64[T]) set(key uint64, bits int, value T) {
 	r.key = key
 	r.bits = bits
 	r.Value = value
 }
 
-func (r *Radix64) clear() {
+func (r *Radix64[T]) clear() {
+	var zero T
+
 	r.key = 0
 	r.bits = 0
-	r.Value = nil
+	r.Value = zero
 }
 
 func bitK64(n uint64, k int) byte {
